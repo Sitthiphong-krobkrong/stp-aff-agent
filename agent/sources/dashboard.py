@@ -66,7 +66,11 @@ class DashboardSource:
         self.paths = [Path(x) for x in sorted(glob.glob(pat))] if any(ch in pat for ch in "*?") else [Path(pat)]
         self.paths = self.paths[-1:] if len(self.paths) > 1 else self.paths  # newest dump (dated filename) only
         if not self.paths or not self.paths[0].exists():
-            raise FileNotFoundError(f"no dashboard dump matches {path}")
+            raise FileNotFoundError(
+                f"ไม่เจอไฟล์ {path}\n"
+                "   1) เปิด https://affiliate.shopee.co.th/offer/product_offer ใน Chrome/Safari (login แล้ว)\n"
+                "   2) กด bookmark 'ส่งให้ bot' (ติดตั้ง: python -m agent bookmarklet | pbcopy)\n"
+                "   3) รอ alert 'บันทึก N สินค้าแล้ว' แล้วรันคำสั่งนี้ใหม่ (หรือระบุไฟล์เอง: --file <path>)")
 
     def search(self, cfg: Config) -> list[Candidate]:
         self.extra: dict[str, dict] = {}

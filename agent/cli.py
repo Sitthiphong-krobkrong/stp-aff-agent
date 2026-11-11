@@ -302,4 +302,8 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if a.verbose else logging.INFO, format="%(asctime)s %(message)s",
                         datefmt="%H:%M:%S")
-    return a.fn(a)
+    try:
+        return a.fn(a)
+    except FileNotFoundError as e:
+        print(f"!! {e}", file=sys.stderr)
+        return 2
