@@ -9,9 +9,9 @@ Handoff baseline: [docs/](docs/) (00–09). Current plan: [docs/10_PLAN_v0.1.md]
 
 ## Setup (Mac)
 ```bash
-brew install ffmpeg python@3.12
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e '.[dev]'
+brew install ffmpeg python@3.12            # needs Python >= 3.11 (macOS system python3 is too old)
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -U pip && pip install -r requirements.txt
 pytest -q
 ```
 Optional: `ollama pull qwen3:8b` (director), or use `--director claude_cli` (your Claude Code login).

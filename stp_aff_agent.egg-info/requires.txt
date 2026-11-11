@@ -1,0 +1,6 @@
+pydantic>=2.5
+Pillow>=10
+edge-tts>=6.1
+
+[dev]
+pytest>=8
