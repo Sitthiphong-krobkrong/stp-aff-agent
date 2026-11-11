@@ -1,6 +1,7 @@
 """stp-aff-agent CLI.
 
   python -m agent discover --source csv --csv offers.csv [--top 5] [--to-inbox inbox/]
+  python -m agent new inbox/<product>
   python -m agent make inbox/<product> [--plan plan.json] [--tts edge|azure|silent] [--director ollama|claude_cli|file]
   python -m agent resume runs/<run_id>
   python -m agent regen runs/<run_id> --from plan
@@ -73,6 +74,8 @@ def _report(run: Run) -> None:
     for f in ("final.mp4", "final_tt.mp4", "post.txt", "check.jpg", "qa_report.json"):
         if (out / f).exists():
             print(f"  {out / f}")
+    if (out / "final.mp4").exists():
+        print(f"\n  open {out / 'final.mp4'}")
     if (out / "qa_report.json").exists():
         rep = read_json(out / "qa_report.json")
         for c in rep["checks"]:
@@ -91,9 +94,53 @@ def _execute(run: Run, cfg, folder: Path | None, plan_file: Path | None) -> int:
     return 0
 
 
+TEMPLATE = """ชื่อสินค้า: 
+หมวดสินค้า: 
+จุดขาย:
+- 
+- 
+- 
+ราคา/โปร: 
+ห้ามพูด: 
+ลิงก์: 
+ลิงก์ affiliate: 
+โค้ด Shopee: 
+สิทธิ์รูป: listing
+แฮชแท็ก: 
+"""
+
+
+def cmd_new(a) -> int:
+    d = Path(a.folder)
+    (d / "images").mkdir(parents=True, exist_ok=True)
+    pt = d / "product.txt"
+    if pt.exists():
+        print(f"{pt} already exists — not overwritten")
+    else:
+        pt.write_text(TEMPLATE, encoding="utf-8")
+        print(f"created {pt}")
+    print(f"next: fill in {pt}, put 4-5 product images in {d / 'images'}/, then\n"
+          f"  python -m agent make {d} --director claude_cli")
+    return 0
+
+
+def check_folder(folder: Path) -> str | None:
+    if not (folder / "product.txt").exists():
+        return f"no product.txt in {folder} — run: python -m agent new {folder}"
+    imgs = [p for p in (folder / "images").glob("*") if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp")] \
+        if (folder / "images").exists() else []
+    if not imgs and "รูป:" not in (folder / "product.txt").read_text(encoding="utf-8"):
+        return f"no images: put 4-5 product images in {folder / 'images'}/"
+    return None
+
+
 def cmd_make(a) -> int:
     cfg = _cfg(a)
     folder = Path(a.folder)
+    problem = check_folder(folder)
+    if problem:
+        print(f"!! {problem}", file=sys.stderr)
+        return 2
     run = Run.create(cfg.runs_dir, folder.name)
     return _execute(run, cfg, folder, Path(a.plan) if a.plan else None)
 
@@ -144,6 +191,10 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--top", type=int, default=10)
     d.add_argument("--to-inbox")
     d.set_defaults(fn=cmd_discover)
+
+    nw = sub.add_parser("new")
+    nw.add_argument("folder")
+    nw.set_defaults(fn=cmd_new)
 
     m = sub.add_parser("make")
     m.add_argument("folder")
