@@ -1,0 +1,175 @@
+{
+ "captured_at": "2026-11-11T16:00:00Z",
+ "source": "fixture (fictional values, real response shape)",
+ "list": [
+  {
+   "item_id": "1001",
+   "long_link": "https://shopee.co.th/universal-link/product/1/1001?utm_source=an_TEST",
+   "product_link": "https://shopee.co.th/product/1/1001",
+   "default_commission_rate": "10%",
+   "seller_commission_rate": "0%",
+   "max_commission_rate": "0%",
+   "batch_item_for_item_card_full": {
+    "itemid": "1001",
+    "shopid": "1",
+    "name": "FIXTURE ที่แขวนไม้ถูพื้น ไม่ต้องเจาะ 5 ช่อง",
+    "images": [
+     "th-test-1001-0",
+     "th-test-1001-1",
+     "th-test-1001-2",
+     "th-test-1001-3",
+     "th-test-1001-4",
+     "th-test-1001-5",
+     "th-test-1001-6",
+     "th-test-1001-7",
+     "th-test-1001-8"
+    ],
+    "price": "8300000",
+    "historical_sold": 10000,
+    "sold": 1000,
+    "stock": 100,
+    "item_rating": {
+     "rating_star": 4.7
+    },
+    "shop_name": "Fixture Shop",
+    "brand": "",
+    "catid": 100636,
+    "tier_variations": [
+     {
+      "name": "สี",
+      "options": [
+       "ขาว",
+       "เทา"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "item_id": "1002",
+   "long_link": "https://shopee.co.th/universal-link/product/1/1002?utm_source=an_TEST",
+   "product_link": "https://shopee.co.th/product/1/1002",
+   "default_commission_rate": "14%",
+   "seller_commission_rate": "5%",
+   "max_commission_rate": "0%",
+   "batch_item_for_item_card_full": {
+    "itemid": "1002",
+    "shopid": "1",
+    "name": "FIXTURE ไม้เซลฟี่บลูทูธ ยืดได้ 180ซม",
+    "images": [
+     "th-test-1002-0",
+     "th-test-1002-1",
+     "th-test-1002-2",
+     "th-test-1002-3",
+     "th-test-1002-4",
+     "th-test-1002-5"
+    ],
+    "price": "17800000",
+    "historical_sold": 1000,
+    "sold": 100,
+    "stock": 100,
+    "item_rating": {
+     "rating_star": 4.7
+    },
+    "shop_name": "Fixture Shop",
+    "brand": "",
+    "catid": 100636,
+    "tier_variations": []
+   }
+  },
+  {
+   "item_id": "1003",
+   "long_link": "https://shopee.co.th/universal-link/product/1/1003?utm_source=an_TEST",
+   "product_link": "https://shopee.co.th/product/1/1003",
+   "default_commission_rate": "2%",
+   "seller_commission_rate": "0%",
+   "max_commission_rate": "0%",
+   "batch_item_for_item_card_full": {
+    "itemid": "1003",
+    "shopid": "1",
+    "name": "FIXTURE โต๊ะข้างเตียง",
+    "images": [
+     "th-test-1003-0",
+     "th-test-1003-1"
+    ],
+    "price": "9500000",
+    "historical_sold": 17,
+    "sold": 1,
+    "stock": 100,
+    "item_rating": {
+     "rating_star": 4.7
+    },
+    "shop_name": "Fixture Shop",
+    "brand": "",
+    "catid": 100636,
+    "tier_variations": []
+   }
+  },
+  {
+   "item_id": "1004",
+   "long_link": "https://shopee.co.th/universal-link/product/1/1004?utm_source=an_TEST",
+   "product_link": "https://shopee.co.th/product/1/1004",
+   "default_commission_rate": "9%",
+   "seller_commission_rate": "0%",
+   "max_commission_rate": "0%",
+   "batch_item_for_item_card_full": {
+    "itemid": "1004",
+    "shopid": "1",
+    "name": "FIXTURE ของหมด",
+    "images": [
+     "th-test-1004-0",
+     "th-test-1004-1",
+     "th-test-1004-2",
+     "th-test-1004-3",
+     "th-test-1004-4"
+    ],
+    "price": "5000000",
+    "historical_sold": 500,
+    "sold": 50,
+    "stock": 0,
+    "item_rating": {
+     "rating_star": 4.7
+    },
+    "shop_name": "Fixture Shop",
+    "brand": "",
+    "catid": 100636,
+    "tier_variations": []
+   }
+  },
+  {
+   "item_id": "1001",
+   "long_link": "https://shopee.co.th/universal-link/product/1/1001?utm_source=an_TEST",
+   "product_link": "https://shopee.co.th/product/1/1001",
+   "default_commission_rate": "10%",
+   "seller_commission_rate": "0%",
+   "max_commission_rate": "0%",
+   "batch_item_for_item_card_full": {
+    "itemid": "1001",
+    "shopid": "1",
+    "name": "FIXTURE duplicate",
+    "images": [
+     "th-test-1001-0",
+     "th-test-1001-1",
+     "th-test-1001-2",
+     "th-test-1001-3",
+     "th-test-1001-4",
+     "th-test-1001-5",
+     "th-test-1001-6",
+     "th-test-1001-7",
+     "th-test-1001-8"
+    ],
+    "price": "8300000",
+    "historical_sold": 10000,
+    "sold": 1000,
+    "stock": 100,
+    "item_rating": {
+     "rating_star": 4.7
+    },
+    "shop_name": "Fixture Shop",
+    "brand": "",
+    "catid": 100636,
+    "tier_variations": []
+   }
+  }
+ ]
+}

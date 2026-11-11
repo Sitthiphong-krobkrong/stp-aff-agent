@@ -23,7 +23,8 @@ def run(argv: list[str], timeout: float | None = None) -> str:
     except subprocess.TimeoutExpired as e:
         raise StepError(f"timeout after {timeout}s: {argv[0]}") from e
     if p.returncode != 0:
-        raise StepError(f"{argv[0]} exited {p.returncode}: {p.stderr.strip()[-800:]}")
+        msg = (p.stderr.strip() or p.stdout.strip())[-800:]
+        raise StepError(f"{Path(argv[0]).name} exited {p.returncode}: {msg}")
     return p.stdout
 
 

@@ -16,11 +16,22 @@ pytest -q
 ```
 Optional: `ollama pull qwen3:8b` (director), or use `--director claude_cli` (your Claude Code login).
 
+## 0) Daily flow (what you actually do)
+1. Open https://affiliate.shopee.co.th/offer/product_offer in your normal browser (logged in).
+2. Click the **ส่งให้ bot** bookmark → `~/Downloads/stp-offers-YYYY-MM-DD.json` (100 products).
+3. `python -m agent auto --count 3 --director claude_cli` → ranks, picks the top 3 not made before,
+   downloads their images, writes the script, voices, renders, QA.
+4. Watch `runs/<id>/out/final.mp4`, post with `post.txt`, pin the cart. `decide runs/<id> approve|reject`.
+
+Install the bookmark once: `python -m agent bookmarklet` → copy the printed `javascript:...` line →
+new bookmark → paste as its URL. It only re-reads the list the page already shows (5 pages, 1.5–3 s apart);
+no bot logs in and nothing bypasses Shopee's checks. (A bot driving the browser itself got a crawler CAPTCHA
+on first visit — that route is not used.)
+
 ## 1) Discover + analyze
 ```bash
-# rows copied from your Shopee Affiliate dashboard (see examples/offers_sample.csv for columns)
-python -m agent discover --source csv --csv offers.csv --top 10
-python -m agent discover --source csv --csv offers.csv --top 3 --to-inbox inbox/   # create product folders
+python -m agent discover --top 10                      # newest ~/Downloads/stp-offers-*.json
+python -m agent discover --source csv --csv offers.csv  # or a CSV you made
 # when Open API access is granted (env SHOPEE_AFF_APP_ID / SHOPEE_AFF_SECRET):
 python -m agent discover --source shopee_openapi --keyword "โคมไฟ"
 ```
@@ -46,13 +57,15 @@ Same `product.txt` as studio, plus `ลิงก์:`, `ลิงก์ affiliat
 ## Guardrails (enforced in code)
 - **Claim gate:** every number on screen / in VO / captions must exist in product evidence; banned words and
   `ห้ามพูด` blocked; battery-type figures need `*` (renderer adds `*ตามสเปกผู้ผลิต`).
-- **Rights gate:** seller listing images are rejected unless `allow_listing_images = true` in config
-  (operator accepts the risk; QA records it). `owned`/`licensed` images always allowed.
+- **Rights gate:** seller listing images allowed because `allow_listing_images = true` (operator accepted the
+  risk 2026-11-11); every QA report records it. Set false to fail closed again.
+- **Script facts:** from the dashboard the bot only knows name, variants, price — the script may not state
+  anything else (no description scraping).
 - **TTS:** `edge` (free) is default; QA attaches a non-blocking warning that its commercial terms are unverified.
   `silent` = renderer test → QA blocks approval. Switch to `azure` with `AZURE_SPEECH_KEY`.
 - **Approval:** `decide approve` refuses unless QA is publishable. Nothing is posted automatically.
 
 ## Known limits
 - edge-tts only works on the Mac (cloud sandboxes can't reach the endpoint).
-- No scraping of Shopee pages. Discovery = CSV from your dashboard until Open API access is granted.
+- No scraping of Shopee pages. Discovery = bookmarklet dump from your dashboard until Open API access is granted.
 - Open API client and Ollama/Claude director are written but **not yet executed against the real services**.

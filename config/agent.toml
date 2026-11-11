@@ -1,5 +1,5 @@
 # Committed defaults. Put machine-specific overrides in config/local.toml (gitignored). Secrets: env only.
-allow_listing_images = false   # true = operator accepts risk of using seller listing images
+allow_listing_images = true    # operator accepted the risk of using seller listing images (2026-11-11, D4)
 
 [tts]
 provider = "edge"              # edge (free, unofficial) | azure | silent (tests only)

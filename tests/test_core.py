@@ -134,3 +134,49 @@ def test_wrap_respects_width():
     f = font(str(cfg.fonts_dir), "SemiBold", 58)
     lines = wrap(d, "เปลี่ยนแสงได้ 3 โหมด ขาว วอร์ม และธรรมชาติ ใช้ได้ทั้งอ่านหนังสือและทำงาน", f, 900)
     assert len(lines) >= 2 and all(d.textlength(l, font=f) <= 900 for l in lines)
+
+
+# ---------------------------------------------------------------- dashboard dump
+def test_dashboard_dump_parsing():
+    from agent.sources.dashboard import DashboardSource
+    src = DashboardSource(ROOT / "tests" / "fixtures" / "dashboard_dump.json")
+    c = {x.source_ref: x for x in src.search(Config())}
+    assert set(c) == {"1001", "1002", "1003"}          # out-of-stock and duplicate dropped
+    a = c["1001"]
+    assert a.price == 83 and a.commission_rate == pytest.approx(0.10) and a.commission_verified
+    assert a.sales_count == 10000 and a.affiliate_link.startswith("https://shopee.co.th/universal-link/")
+    assert a.image_urls[0] == "https://down-th.img.susercontent.com/file/th-test-1001-0"
+    assert src.extra["1001"]["variants"] == ["สี: ขาว, เทา"]
+
+
+def test_dashboard_rank_and_inbox(tmp_path):
+    from agent.cli import write_inbox
+    from agent.sources.dashboard import DashboardSource
+    src = DashboardSource(ROOT / "tests" / "fixtures" / "dashboard_dump.json")
+    ranked = rank(src.search(Config()), ScoreCfg())
+    assert [c.source_ref for c, _ in ranked] == ["1002", "1001", "1003"]
+    d = write_inbox(ranked[0][0], src.extra["1002"], tmp_path)
+    p = product_from_folder(d)[0]
+    assert "180" in "".join(p.facts.values()) and p.price == 178 and p.affiliate_link
+
+
+# ---------------------------------------------------------------- director retry loop
+def test_director_feeds_claim_errors_back_and_retries(monkeypatch):
+    import agent.director as director
+    from agent.schemas import Asset
+    good = (DEMO / "plan.json").read_text(encoding="utf-8")
+    bad = good.replace("หรี่ไฟได้ 10 ระดับ เลือก", "หรี่ไฟได้ 12 ระดับ เลือก")
+    prompts = []
+
+    def fake(prompt):
+        prompts.append(prompt)
+        return "<think>x</think>" + (bad if len(prompts) == 1 else good)
+
+    cfg = Config()
+    cfg.director.provider = "ollama"
+    monkeypatch.setattr(director, "_provider", lambda cfg, pf: (fake, "fake"))
+    assets = [Asset(id=f"img0{i}", path="x", sha256="x", width=1000, height=1000) for i in range(5)]
+    vp, attempts = director.plan(demo_product(), assets, cfg)
+    assert len(attempts) == 2 and attempts[0]["errors"] and not attempts[1]["errors"]
+    assert "'12'" in prompts[1]                       # error was fed back to the model
+    assert vp.director == "fake"

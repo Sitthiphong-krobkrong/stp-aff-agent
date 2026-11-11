@@ -24,6 +24,9 @@ def get_source(name: str, **kw) -> ProductSource:
     if name == "csv":
         from .csv_source import CsvSource
         return CsvSource(**kw)
+    if name == "dashboard":
+        from .dashboard import DashboardSource
+        return DashboardSource(**kw)
     if name == "shopee_openapi":
         from .shopee_openapi import ShopeeOpenAPISource
         return ShopeeOpenAPISource(**kw)

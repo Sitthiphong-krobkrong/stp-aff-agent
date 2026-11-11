@@ -1,6 +1,8 @@
 """stp-aff-agent CLI.
 
-  python -m agent discover --source csv --csv offers.csv [--top 5] [--to-inbox inbox/]
+  python -m agent bookmarklet                  # print the "ส่งให้ bot" bookmark
+  python -m agent auto --count 3 --director claude_cli   # Downloads/stp-offers-*.json → videos
+  python -m agent discover [--file dump.json] [--top 10] [--to-inbox inbox/]
   python -m agent new inbox/<product>
   python -m agent make inbox/<product> [--plan plan.json] [--tts edge|azure|silent] [--director ollama|claude_cli|file]
   python -m agent resume runs/<run_id>
@@ -37,10 +39,34 @@ def _cfg(a) -> config_mod.Config:
     return cfg
 
 
+def _make_source(a):
+    kw = {"csv": {"path": a.csv}, "manual": {"inbox": a.inbox}, "shopee_openapi": {"keyword": a.keyword},
+          "dashboard": {"path": a.file}}[a.source]
+    return get_source(a.source, **kw)
+
+
+def write_inbox(c, extra: dict, inbox: Path) -> Path:
+    """Product folder from a discovered candidate. Facts = only what the source returned (name, variants, price)."""
+    import re as _re
+    d = inbox / f"{c.source_ref.split('#')[-1]}-{_re.sub(r'[^0-9A-Za-z฀-๿]+', '-', c.name)[:30].strip('-')}"
+    d.mkdir(parents=True, exist_ok=True)
+    points = [c.name] + list(extra.get("variants", []))
+    lines = [f"ชื่อสินค้า: {c.name}", f"แบรนด์: {extra.get('brand') or ''}", f"หมวดสินค้า: {c.category or ''}",
+             "จุดขาย:", *[f"- {p}" for p in points],
+             f"ราคา/โปร: {c.price:g}" if c.price is not None else "ราคา/โปร: ", "ห้ามพูด: ",
+             f"ลิงก์: {c.listing_url}", f"ลิงก์ affiliate: {c.affiliate_link or ''}",
+             f"ค่าคอม: {c.commission_rate * 100:g}" if c.commission_rate is not None else "ค่าคอม: ",
+             f"ขายแล้ว: {c.sales_count if c.sales_count is not None else ''}", "สิทธิ์รูป: listing", "รูป:",
+             *[f"- {u}" for u in c.image_urls[:8]]]
+    (d / "product.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    write_json(d / "candidate.json", {"candidate": c.model_dump(mode="json"), "extra": extra})
+    return d
+
+
 def cmd_discover(a) -> int:
     cfg = _cfg(a)
-    kw = {"csv": {"path": a.csv}, "manual": {"inbox": a.inbox}, "shopee_openapi": {"keyword": a.keyword}}[a.source]
-    cands = get_source(a.source, **kw).search(cfg)
+    src = _make_source(a)
+    cands = src.search(cfg)
     ranked = rank(cands, cfg.score)
     out = cfg.runs_dir / f"discover-{now_iso().replace(':', '')}.json"
     write_json(out, [{"candidate": c.model_dump(mode="json"), "score": s} for c, s in ranked])
@@ -52,18 +78,8 @@ def cmd_discover(a) -> int:
               f"{c.price if c.price is not None else '?':>7} {len(c.image_urls):>3}  {'✓' if s['eligible'] else '✗'}  "
               f"{c.name[:48]}" + (f"   ({'; '.join(s['reasons'])})" if s["reasons"] else ""))
     if a.to_inbox:
-        for c, s in [x for x in ranked if x[1]["eligible"]][: a.top]:
-            d = Path(a.to_inbox) / (c.source_ref.split("#")[-1] + "-" + "".join(ch for ch in c.name if ch.isalnum())[:30])
-            d.mkdir(parents=True, exist_ok=True)
-            imgs = "\n".join(f"- {u}" for u in c.image_urls)
-            (d / "product.txt").write_text(
-                f"ชื่อสินค้า: {c.name}\nหมวดสินค้า: {c.category or ''}\nจุดขาย:\n- \nราคา/โปร: "
-                f"{c.price if c.price is not None else ''}\nห้ามพูด:\nลิงก์: {c.listing_url}\n"
-                f"ลิงก์ affiliate: {c.affiliate_link or ''}\nค่าคอม: "
-                f"{c.commission_rate * 100 if c.commission_rate is not None else ''}\nขายแล้ว: "
-                f"{c.sales_count if c.sales_count is not None else ''}\nสิทธิ์รูป: listing\nรูป:\n{imgs}\n",
-                encoding="utf-8")
-            print(f"  → {d}")
+        for c, _ in [x for x in ranked if x[1]["eligible"]][: a.top]:
+            print(f"  → {write_inbox(c, getattr(src, 'extra', {}).get(c.source_ref, {}), Path(a.to_inbox))}")
     return 0
 
 
@@ -175,6 +191,41 @@ def cmd_decide(a) -> int:
     return 0
 
 
+def cmd_auto(a) -> int:
+    """dashboard dump → rank → top N not made before → product folders → make each."""
+    cfg = _cfg(a)
+    src = _make_source(a)
+    ranked = [x for x in rank(src.search(cfg), cfg.score) if x[1]["eligible"]]
+    ledger_p = cfg.runs_dir / "made.json"
+    ledger = read_json(ledger_p) if ledger_p.exists() else {}
+    todo = [(c, s) for c, s in ranked if c.source_ref not in ledger][: a.count]
+    print(f"{len(ranked)} eligible, {len(todo)} to make (skipping {len(ledger)} already made)")
+    results = []
+    for c, sc in todo:
+        folder = write_inbox(c, getattr(src, "extra", {}).get(c.source_ref, {}), Path(a.inbox))
+        comm = f"{c.commission_rate * 100:g}%" if c.commission_rate is not None else "?"
+        print(f"\n=== {sc['total']:.3f}  comm {comm}  sold {c.sales_count}  {c.name[:60]}")
+        run = Run.create(cfg.runs_dir, folder.name)
+        code = _execute(run, cfg, folder, None)
+        if run.p("out", "final.mp4").exists():  # only real videos count; SKIPPED/FAILED get retried next time
+            ledger[c.source_ref] = {"run": run.id, "state": run.state()["state"], "at": now_iso()}
+            write_json(ledger_p, ledger)
+        results.append((run.state()["state"], c.name, run.id))
+    print("\n== summary ==")
+    for st, name, rid in results:
+        print(f"{st:<20} {name[:50]}  runs/{rid}")
+    return 0
+
+
+def cmd_bookmarklet(a) -> int:
+    import re as _re
+    from .config import ROOT
+    js = (ROOT / "tools" / "bookmarklet.js").read_text(encoding="utf-8")
+    js = "\n".join(l for l in js.splitlines() if not l.strip().startswith("//"))
+    print("javascript:" + _re.sub(r"\s*\n\s*", " ", js).strip())
+    return 0
+
+
 def cmd_status(a) -> int:
     cfg = _cfg(a)
     for d in sorted(p for p in cfg.runs_dir.glob("*") if (p / "state.json").exists()):
@@ -190,7 +241,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     d = sub.add_parser("discover")
-    d.add_argument("--source", default="csv", choices=["csv", "manual", "shopee_openapi"])
+    d.add_argument("--source", default="dashboard", choices=["dashboard", "csv", "manual", "shopee_openapi"])
+    d.add_argument("--file", default=str(Path.home() / "Downloads" / "stp-offers-*.json"))
     d.add_argument("--csv")
     d.add_argument("--inbox", default="inbox")
     d.add_argument("--keyword")
@@ -229,6 +281,20 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("decision", choices=["approve", "reject"])
     c.add_argument("--note", default="")
     c.set_defaults(fn=cmd_decide)
+
+    au = sub.add_parser("auto")
+    au.add_argument("--source", default="dashboard", choices=["dashboard", "csv", "shopee_openapi"])
+    au.add_argument("--file", default=str(Path.home() / "Downloads" / "stp-offers-*.json"))
+    au.add_argument("--csv")
+    au.add_argument("--keyword")
+    au.add_argument("--inbox", default="inbox")
+    au.add_argument("--count", type=int, default=3)
+    au.add_argument("--tts", choices=["edge", "azure", "silent"])
+    au.add_argument("--director", choices=["ollama", "claude_cli", "file"])
+    au.set_defaults(fn=cmd_auto, plan=None, allow_listing_images=False)
+
+    bm = sub.add_parser("bookmarklet")
+    bm.set_defaults(fn=cmd_bookmarklet)
 
     s = sub.add_parser("status")
     s.set_defaults(fn=cmd_status)
