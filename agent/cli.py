@@ -127,10 +127,16 @@ def cmd_new(a) -> int:
 def check_folder(folder: Path) -> str | None:
     if not (folder / "product.txt").exists():
         return f"no product.txt in {folder} — run: python -m agent new {folder}"
+    from .sources.manual import parse_product_txt
+    info = parse_product_txt((folder / "product.txt").read_text(encoding="utf-8"))
+    if not info.get("name"):
+        return f"'ชื่อสินค้า:' is empty in {folder / 'product.txt'}"
+    if not [x for x in info["points"] if x]:
+        return f"'จุดขาย:' has no items in {folder / 'product.txt'} — the script may only use facts listed there"
     imgs = [p for p in (folder / "images").glob("*") if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp")] \
         if (folder / "images").exists() else []
-    if not imgs and "รูป:" not in (folder / "product.txt").read_text(encoding="utf-8"):
-        return f"no images: put 4-5 product images in {folder / 'images'}/"
+    if len(imgs) + len(info["images"]) < 3:
+        return f"need at least 3 images in {folder / 'images'}/ (found {len(imgs)})"
     return None
 
 
