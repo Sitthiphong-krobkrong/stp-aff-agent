@@ -1,0 +1,14 @@
+# Committed defaults. Put machine-specific overrides in config/local.toml (gitignored). Secrets: env only.
+allow_listing_images = false   # true = operator accepts risk of using seller listing images
+
+[tts]
+provider = "edge"              # edge (free, unofficial) | azure | silent (tests only)
+voice = "th-TH-NiwatNeural"
+rate = "-5%"
+
+[director]
+provider = "ollama"            # ollama | claude_cli | file
+model = "qwen3:8b"
+
+[video]
+max_duration = 25.0

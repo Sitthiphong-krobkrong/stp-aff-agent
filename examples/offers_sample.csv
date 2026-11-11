@@ -1,0 +1,5 @@
+name,listing_url,affiliate_link,price,commission_rate,sales_count,rating,shop_name,category,image_urls
+SAMPLE A — fictional row for testing,https://shopee.co.th/sample-a,,259,12%,8.2k,4.8,ShopA,ของใช้ในบ้าน,a1.jpg|a2.jpg|a3.jpg|a4.jpg|a5.jpg
+SAMPLE B — fictional row for testing,https://shopee.co.th/sample-b,,1890,4%,15000,4.9,ShopB,เครื่องเสียง,b1.jpg|b2.jpg|b3.jpg|b4.jpg
+SAMPLE C — fictional row for testing,https://shopee.co.th/sample-c,,99,,320,,ShopC,เครื่องเขียน,c1.jpg|c2.jpg
+SAMPLE D — fictional row for testing,https://shopee.co.th/sample-d,,450,8,1200,4.6,ShopD,อุปกรณ์มือถือ,d1.jpg|d2.jpg|d3.jpg|d4.jpg
