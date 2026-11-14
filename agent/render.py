@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from .config import Config
 from .schemas import Shot
-from .util import run
+from .util import duration, run
 
 FG_X0, FG_X1, FG_Y1 = 40, 1040, 1500     # product image box; top edge follows the text block
 FG_MIN_TOP, FG_MAX_TOP = 700, 900
@@ -37,6 +37,7 @@ class Timing:
     slots: list[float]
     starts: list[float]
     total: float
+    crossfade: float = 0.0
     warning: str = ""
 
 
@@ -45,7 +46,10 @@ def plan_timing(vo_durs: list[float], styles: list[str], cfg: Config) -> Timing:
     n = len(vo_durs)
     holds = [v.cta_hold if s == "cta" else 0.0 for s in styles]
     speech = sum(vo_durs)
-    budget = v.max_duration - n * (v.lead + v.gap) - sum(holds) - v.tail
+    cf = v.crossfade if n > 1 else 0.0
+    cf_total = (n - 1) * cf
+    # budget accounts for crossfade overlap so the output still hits max_duration
+    budget = v.max_duration + cf_total - n * (v.lead + v.gap) - sum(holds) - v.tail
     tempo = max(1.0, speech / budget) if budget > 0 else v.max_tempo
     warning = ""
     if tempo > v.max_tempo:
@@ -53,8 +57,10 @@ def plan_timing(vo_durs: list[float], styles: list[str], cfg: Config) -> Timing:
         tempo = v.max_tempo
     slots = [round(v.lead + d / tempo + v.gap + h, 3) for d, h in zip(vo_durs, holds)]
     slots[-1] = round(slots[-1] + v.tail, 3)
-    starts = [round(sum(slots[:i]), 3) for i in range(n)]
-    return Timing(tempo, slots, starts, round(sum(slots), 3), warning)
+    # starts in output timeline (accounting for crossfade overlap)
+    starts = [round(sum(slots[:i]) - i * cf, 3) for i in range(n)]
+    total = round(sum(slots) - cf_total, 3)
+    return Timing(tempo, slots, starts, total, cf, warning)
 
 
 # ------------------------------------------------------------------ fonts / text
@@ -167,14 +173,38 @@ def render_segment(frame: Path, card: Path, slot: float, anchor: tuple[float, fl
                    cfg: Config, zoom_in: bool = True) -> None:
     v = cfg.video
     W, H, fps = v.width, v.height, v.fps
-    z = f"1.0+{v.zoom}*t/{slot:.3f}" if zoom_in else f"{1 + v.zoom}-{v.zoom}*t/{slot:.3f}"
+    fade_frames = max(1, int(v.text_fade * fps))
+    # eased zoom: pow() needs escaped comma for FFmpeg expr
+    if zoom_in:
+        z = f"1.0+{v.zoom}*(1-pow(1-t/{slot:.3f}\\,2))"
+    else:
+        z = f"{1 + v.zoom}-{v.zoom}*pow(t/{slot:.3f}\\,2)"
     ax, ay = anchor
     vf = (f"[0:v]fps={fps},scale=w='{W}*({z})':h='{H}*({z})':eval=frame,"
           f"crop={W}:{H}:x='(iw-{W})*{ax:.3f}':y='(ih-{H})*{ay:.3f}',setsar=1[v0];"
-          f"[v0][1:v]overlay=0:0,format=yuv420p[o]")
+          f"[1:v]fade=in:0:{fade_frames}[card];"
+          f"[v0][card]overlay=0:0,format=yuv420p[o]")
     run(["ffmpeg", "-v", "error", "-y", "-loop", "1", "-framerate", str(fps), "-t", f"{slot:.3f}", "-i", frame,
          "-loop", "1", "-i", card, "-filter_complex", vf, "-map", "[o]", "-t", f"{slot:.3f}", "-r", str(fps),
          "-c:v", "libx264", "-preset", v.preset, "-crf", str(v.crf), "-an", out], timeout=600)
+
+
+def render_segment_ai(clip: Path, card: Path, slot: float, out: Path, cfg: Config) -> None:
+    """Overlay text card on an AI-generated video clip, scaling to 1080x1920."""
+    v = cfg.video
+    W, H, fps = v.width, v.height, v.fps
+    fade_frames = max(1, int(v.text_fade * fps))
+    vf = (f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase,"
+          f"crop={W}:{H},fps={fps},setsar=1[bg];"
+          f"[1:v]fade=in:0:{fade_frames}[card];"
+          f"[bg][card]overlay=0:0,format=yuv420p[o]")
+    run(["ffmpeg", "-v", "error", "-y",
+         "-i", clip,
+         "-loop", "1", "-i", card,
+         "-filter_complex", vf, "-map", "[o]",
+         "-t", f"{slot:.3f}", "-r", str(fps),
+         "-c:v", "libx264", "-preset", v.preset, "-crf", str(v.crf),
+         "-an", out], timeout=300)
 
 
 def build_audio(vo: list[Path], timing: Timing, out: Path, cfg: Config, normalize: bool = True) -> None:
@@ -190,13 +220,52 @@ def build_audio(vo: list[Path], timing: Timing, out: Path, cfg: Config, normaliz
     run(["ffmpeg", "-v", "error", "-y", *ins, "-filter_complex", ";".join(fc), "-map", "[o]", out], timeout=300)
 
 
-def concat_and_mux(segs: list[Path], audio: Path, out: Path, work: Path) -> None:
+def concat_and_mux(segs: list[Path], audio: Path, out: Path, work: Path,
+                   timing: "Timing | None" = None, cfg: "Config | None" = None) -> None:
+    if cfg and cfg.video.crossfade > 0 and len(segs) > 1 and timing:
+        _crossfade_and_mux(segs, audio, out, work, timing, cfg)
+        return
     lst = work / "concat.txt"
     lst.write_text("".join(f"file '{p.resolve()}'\n" for p in segs), encoding="utf-8")
     vid = work / "video_only.mp4"
     run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", lst, "-c", "copy", vid])
     run(["ffmpeg", "-v", "error", "-y", "-i", vid, "-i", audio, "-map", "0:v", "-map", "1:a", "-c:v", "copy",
          "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart", out])
+
+
+def _crossfade_and_mux(segs: list[Path], audio: Path, out: Path, work: Path,
+                       timing: Timing, cfg: Config) -> None:
+    """Concatenate segments with xfade transitions, then mux audio."""
+    v = cfg.video
+    cf = timing.crossfade
+    n = len(segs)
+    durs = timing.slots
+
+    # build xfade filter chain
+    ins: list[str] = []
+    for s in segs:
+        ins += ["-i", str(s)]
+    fc_parts: list[str] = []
+    prev = "[0:v]"
+    for i in range(n - 1):
+        offset = round(sum(durs[: i + 1]) - (i + 1) * cf, 3)
+        tag = f"[v{i + 1}]" if i < n - 2 else "[xf]"
+        fc_parts.append(f"{prev}[{i + 1}:v]xfade=transition=fade:duration={cf:.3f}:offset={offset:.3f}{tag}")
+        prev = tag
+
+    # cinematic fade-in / fade-out on the whole video
+    total = round(sum(durs) - (n - 1) * cf, 3)
+    fi = int(0.5 * v.fps)
+    fo_st = max(0, total - 0.5)
+    fc_parts.append(f"[xf]fade=in:0:{fi},fade=out:st={fo_st:.3f}:d=0.5,format=yuv420p[vout]")
+
+    vid = work / "video_only.mp4"
+    run(["ffmpeg", "-v", "error", "-y", *ins, "-filter_complex", ";".join(fc_parts),
+         "-map", "[vout]", "-c:v", "libx264", "-preset", v.preset, "-crf", str(v.crf),
+         "-r", str(v.fps), "-an", vid], timeout=600)
+
+    run(["ffmpeg", "-v", "error", "-y", "-i", vid, "-i", audio, "-map", "0:v", "-map", "1:a",
+         "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart", out])
 
 
 def srt(lines: list[str], timing: Timing, lead: float, out: Path) -> None:

@@ -22,9 +22,18 @@ class VideoCfg(BaseModel):
     tail: float = 0.3
     cta_hold: float = 0.4
     vo_lufs: float = -15.0
-    zoom: float = 0.08
+    zoom: float = 0.15
+    crossfade: float = 0.4            # seconds of crossfade between shots
+    text_fade: float = 0.3            # seconds for text card fade-in
     crf: int = 19
     preset: str = "veryfast"
+    # AI video (LTX-2-mlx) — set ai_video = true in local.toml to enable
+    ai_video: bool = False
+    ai_width: int = 288               # 9:16 vertical, must be multiple of 32
+    ai_height: int = 512              # must be multiple of 32
+    ai_frame_rate: int = 24           # LTX native fps (FFmpeg re-times to video.fps)
+    ai_model: str = "dgrauet/ltx-2.3-mlx-q4"
+    ai_timeout: float = 600           # seconds per clip
 
 
 class TTSCfg(BaseModel):

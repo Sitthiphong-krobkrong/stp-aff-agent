@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from . import assets as assets_mod
+from . import ai_video, assets as assets_mod
 from . import director, qa, render
 from .config import Config
 from .runs import Run
@@ -100,21 +100,31 @@ class Pipeline:
             shutil.rmtree(work)
         work.mkdir(parents=True)
         by_id = {a.id: a for a in self.assets()}
+        use_ai = cfg.video.ai_video and ai_video.available()
+        prod = self.product()
         segs = []
         for i, s in enumerate(shots):
             card = work / f"card_{i}.png"
             top = render.make_card(s, card, cfg)
-            fp = work / f"frame_{i}.jpg"
-            anchor = render.compose_frame(self.run.p(by_id[s.asset_id].path), fp, cfg, top)
             seg = work / f"seg_{i}.mp4"
-            render.render_segment(fp, card, timing.slots[i], anchor, seg, cfg, zoom_in=i % 2 == 0)
-            log.info("%s shot %d/%d %s %.2fs", platform, i + 1, n, s.style, timing.slots[i])
+            img_path = self.run.p(by_id[s.asset_id].path)
+            if use_ai:
+                clip = work / f"ai_clip_{i}.mp4"
+                prompt = ai_video.product_prompt(prod.name, s.style)
+                ai_video.generate_clip(img_path, prompt, clip, timing.slots[i], cfg)
+                render.render_segment_ai(clip, card, timing.slots[i], seg, cfg)
+            else:
+                fp = work / f"frame_{i}.jpg"
+                anchor = render.compose_frame(img_path, fp, cfg, top)
+                render.render_segment(fp, card, timing.slots[i], anchor, seg, cfg, zoom_in=i % 2 == 0)
+            log.info("%s shot %d/%d %s %.2fs%s", platform, i + 1, n, s.style, timing.slots[i],
+                     " [AI]" if use_ai else "")
             segs.append(seg)
         audio = work / "vo_track.wav"
         render.build_audio(vo_files, timing, audio, cfg, normalize=cfg.tts.provider != "silent")
         name = "final" if platform == "shopee" else "final_tt"
         out = self.run.p("out", f"{name}.mp4")
-        render.concat_and_mux(segs, audio, out, work)
+        render.concat_and_mux(segs, audio, out, work, timing, cfg)
         render.srt([s.vo for s in shots], timing, cfg.video.lead, self.run.p("out", f"{name}.srt"))
         write_json(work / "timing.json", timing.__dict__)
         return out, timing
