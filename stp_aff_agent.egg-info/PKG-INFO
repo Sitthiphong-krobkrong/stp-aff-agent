@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: stp-aff-agent
+Version: 0.1.0
+Requires-Python: >=3.11
+Requires-Dist: pydantic>=2.5
+Requires-Dist: Pillow>=10
+Requires-Dist: edge-tts>=6.1
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"
