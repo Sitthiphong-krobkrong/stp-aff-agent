@@ -17,6 +17,8 @@ pytest -q
 Optional: `ollama pull qwen3:8b` (director), or use `--director claude_cli` (your Claude Code login).
 
 ## 0) Daily flow (what you actually do)
+Easiest: `claude` in this folder → `/daily` (or `/daily 5`). It does steps 2–4 and reports.
+
 1. Open https://affiliate.shopee.co.th/offer/product_offer in your normal browser (logged in).
 2. Click the **ส่งให้ bot** bookmark → `~/Downloads/stp-offers-YYYY-MM-DD.json` (100 products).
 3. `python -m agent auto --count 3 --director claude_cli` → ranks, picks the top 3 not made before,
