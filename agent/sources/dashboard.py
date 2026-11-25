@@ -52,7 +52,7 @@ def parse_item(it: dict, captured_at: str) -> tuple[Candidate, dict] | None:
         limitations=["commission = rate shown in operator's affiliate dashboard at capture time "
                      f"(seller extra: {it.get('seller_commission_rate', '?')})",
                      "sales_count = Shopee historical_sold (rounded by Shopee)",
-                     "seller listing images — usable only with allow_listing_images"])
+                     "seller listing images are not accepted as production references without documented grants"])
     extra = {"variants": variants, "stock": card.get("stock"), "brand": card.get("brand") or None,
              "seller_rate": seller_rate}
     return c, extra

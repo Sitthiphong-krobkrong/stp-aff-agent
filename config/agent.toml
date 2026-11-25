@@ -1,5 +1,4 @@
 # Committed defaults. Put machine-specific overrides in config/local.toml (gitignored). Secrets: env only.
-allow_listing_images = true    # operator accepted the risk of using seller listing images (2026-11-11, D4)
 
 [tts]
 provider = "edge"              # edge (free, unofficial) | azure | silent (tests only)
@@ -12,3 +11,4 @@ model = "qwen3:8b"
 
 [video]
 max_duration = 25.0
+ai_video = true              # animate documented real-product references with local LTX

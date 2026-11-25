@@ -1,9 +1,4 @@
-"""AI video generation via LTX-2-mlx (Apple Silicon only, local inference).
-
-Wraps the LTX-2-mlx CLI to generate short image-to-video clips from product photos.
-Each clip is used as the background for one shot in the render pipeline, replacing
-the static Ken Burns zoom on a still frame.
-"""
+"""Local LTX image-to-video from a documented real-product reference."""
 from __future__ import annotations
 
 import subprocess
@@ -13,11 +8,12 @@ from .config import Config, ROOT
 from .util import StepError, log
 
 LTX_DIR = ROOT / "tools" / "ltx-2-mlx"
+LTX_CLI = LTX_DIR / ".venv" / "bin" / "ltx-2-mlx"
 
 
 def available() -> bool:
-    """Check whether the LTX-2-mlx tool is installed."""
-    return (LTX_DIR / "pyproject.toml").exists()
+    """Check for the installed CLI, not just a source checkout."""
+    return LTX_CLI.is_file()
 
 
 def _ltx_frames(duration_sec: float, frame_rate: int = 24) -> int:
@@ -46,7 +42,7 @@ def generate_clip(
     out.parent.mkdir(parents=True, exist_ok=True)
 
     argv = [
-        "python3", "-m", "uv", "run", "ltx-2-mlx", "generate",
+        str(LTX_CLI), "generate",
         "--prompt", prompt,
         "--image", str(image.resolve()),
         "--distilled",
@@ -81,11 +77,7 @@ def generate_clip(
 
 
 def product_prompt(product_name: str, style: str) -> str:
-    """Build an English prompt for LTX from shot style and product name.
-
-    Keeps it simple: LTX responds better to camera/motion descriptions
-    than product specs. The product identity comes from the --image anchor.
-    """
+    """Animate the supplied product reference; avoid adding unsupported visual details."""
     motion = {
         "hook": "dramatic slow reveal, camera pulling back",
         "title": "slow smooth orbit, product rotating gently",
@@ -93,4 +85,8 @@ def product_prompt(product_name: str, style: str) -> str:
         "cta": "glamour shot, soft glow, slow zoom in",
     }
     m = motion.get(style, "slow orbit, studio lighting")
-    return f"Product video, {m}, clean background, studio lighting, commercial quality"
+    return (f"Studio video of the exact product in the reference image ({product_name}). "
+            f"{m}. Preserve its shape, color, parts and proportions. "
+            "Keep the product stationary except for subtle camera motion. "
+            "Do not invent accessories, demonstrations, labels, logos, watermarks or readable text. "
+            "Plain clean background, no hands, no additional objects.")

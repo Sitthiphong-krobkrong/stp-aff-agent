@@ -1,8 +1,8 @@
 """TTS providers → one mono 48k WAV per line, leading/trailing silence trimmed.
 
-edge   : free, unofficial Microsoft Edge read-aloud endpoint (edge-tts). Commercial-use terms unclear —
-         recorded as a non-blocking QA warning on every package. Works on the Mac; blocked in cloud sandboxes.
-azure  : Azure AI Speech REST (same Thai neural voices), needs AZURE_SPEECH_KEY. Clear commercial terms.
+edge   : unofficial Microsoft Edge read-aloud endpoint (edge-tts). Commercial-use terms unverified;
+         QA blocks approval without a documented grant for the selected voice.
+azure  : Azure AI Speech REST, needs AZURE_SPEECH_KEY and a documented grant for the selected voice.
 silent : placeholder durations for renderer tests only. QA marks the package NOT publishable.
 """
 from __future__ import annotations
@@ -15,7 +15,7 @@ from ..util import StepError, run
 
 LICENSE_NOTE = {
     "edge": "edge-tts (unofficial endpoint) — commercial voice rights unverified",
-    "azure": "Azure AI Speech — commercial use per Azure terms",
+    "azure": "Azure AI Speech — verify selected voice and output terms",
     "silent": "no voice (renderer test only)",
 }
 

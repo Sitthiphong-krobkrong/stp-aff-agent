@@ -2,7 +2,8 @@
 
 Columns (header names, any order; extra columns ignored):
   name, listing_url, affiliate_link, price, commission_rate (7 or 7% or 0.07), sales_count, rating,
-  shop_name, category, image_urls (separated by space or |)
+  shop_name, category, observed_at, image_urls (separated by space or |),
+  fact_1..fact_5 (optional product attributes recorded in the authorized source)
 """
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ import re
 from pathlib import Path
 
 from ..config import Config
-from ..schemas import Candidate
+from ..schemas import Candidate, now_iso
 
 
 def _f(v: str | None) -> float | None:
@@ -37,6 +38,7 @@ class CsvSource:
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
+        self.extra: dict[str, dict] = {}
 
     def search(self, cfg: Config) -> list[Candidate]:
         out = []
@@ -46,13 +48,22 @@ class CsvSource:
                 if not row.get("name") or not row.get("listing_url"):
                     continue
                 sales = _f(row.get("sales_count"))
+                observed = row.get("observed_at")
+                limitations = ["copied from affiliate dashboard by operator; values as of export time"]
+                if not observed:
+                    observed = now_iso()
+                    limitations.append("observation time unknown; timestamp is import time")
+                ref = f"{self.path.name}#{i + 2}"
+                facts = [row.get(f"fact_{n}", "") for n in range(1, 6)]
+                self.extra[ref] = {"facts": [x for x in facts if x]}
                 out.append(Candidate(
-                    source="csv", source_ref=f"{self.path.name}#{i + 2}", name=row["name"],
+                    source="csv", source_ref=ref, name=row["name"],
+                    observed_at=observed,
                     listing_url=row["listing_url"], affiliate_link=row.get("affiliate_link") or None,
                     shop_name=row.get("shop_name") or None, price=_f(row.get("price")),
                     commission_rate=_rate(row.get("commission_rate")), commission_verified=False,
                     sales_count=int(sales) if sales is not None else None, rating=_f(row.get("rating")),
                     category=row.get("category") or None,
                     image_urls=[u for u in re.split(r"[\s|]+", row.get("image_urls", "")) if u],
-                    limitations=["copied from affiliate dashboard by operator; values as of export time"]))
+                    limitations=limitations))
         return out

@@ -186,7 +186,7 @@ def render_segment(frame: Path, card: Path, slot: float, anchor: tuple[float, fl
           f"[v0][card]overlay=0:0,format=yuv420p[o]")
     run(["ffmpeg", "-v", "error", "-y", "-loop", "1", "-framerate", str(fps), "-t", f"{slot:.3f}", "-i", frame,
          "-loop", "1", "-i", card, "-filter_complex", vf, "-map", "[o]", "-t", f"{slot:.3f}", "-r", str(fps),
-         "-c:v", "libx264", "-preset", v.preset, "-crf", str(v.crf), "-an", out], timeout=600)
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", v.preset, "-crf", str(v.crf), "-an", out], timeout=600)
 
 
 def render_segment_ai(clip: Path, card: Path, slot: float, out: Path, cfg: Config) -> None:
@@ -203,7 +203,7 @@ def render_segment_ai(clip: Path, card: Path, slot: float, out: Path, cfg: Confi
          "-loop", "1", "-i", card,
          "-filter_complex", vf, "-map", "[o]",
          "-t", f"{slot:.3f}", "-r", str(fps),
-         "-c:v", "libx264", "-preset", v.preset, "-crf", str(v.crf),
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", v.preset, "-crf", str(v.crf),
          "-an", out], timeout=300)
 
 
@@ -261,7 +261,7 @@ def _crossfade_and_mux(segs: list[Path], audio: Path, out: Path, work: Path,
 
     vid = work / "video_only.mp4"
     run(["ffmpeg", "-v", "error", "-y", *ins, "-filter_complex", ";".join(fc_parts),
-         "-map", "[vout]", "-c:v", "libx264", "-preset", v.preset, "-crf", str(v.crf),
+         "-map", "[vout]", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", v.preset, "-crf", str(v.crf),
          "-r", str(v.fps), "-an", vid], timeout=600)
 
     run(["ffmpeg", "-v", "error", "-y", "-i", vid, "-i", audio, "-map", "0:v", "-map", "1:a",
