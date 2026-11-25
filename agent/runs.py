@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -45,6 +46,7 @@ class Run:
         (r.path / "out").mkdir(exist_ok=True)
         write_json(r.state_file, {"run_id": rid, "state": "NEW", "created_at": now_iso(), "steps": {},
                                   "retries": {}})
+        write_json(r.p("version.json"), {"version": 1})
         r.event("created", name=name)
         return r
 
@@ -82,6 +84,26 @@ class Run:
 
     def retries(self, step: str) -> int:
         return self.state()["retries"].get(step, 0)
+
+    def version(self) -> int:
+        p = self.p("version.json")
+        return int(read_json(p)["version"]) if p.exists() else 1
+
+    def snapshot_version(self) -> Path:
+        """Preserve reviewable inputs and output before a requested revision."""
+        old = self.version()
+        dest = self.p("versions", f"v{old:03d}")
+        if dest.exists():
+            raise ValueError(f"version {old} was already snapshotted")
+        dest.mkdir(parents=True)
+        for name in ("state.json", "version.json", "product.json", "candidate.json", "rights.json", "plan.json"):
+            src = self.p(name)
+            if src.is_file():
+                shutil.copy2(src, dest / name)
+        if self.p("out").exists():
+            shutil.copytree(self.p("out"), dest / "out")
+        self.event("version_snapshot", version=old, path=str(dest))
+        return dest
 
     def invalidate_from(self, step_order: list[str], step: str) -> None:
         """Regenerate: forget results of `step` and everything after it."""
