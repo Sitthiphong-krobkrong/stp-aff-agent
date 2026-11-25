@@ -66,6 +66,14 @@ class Asset(BaseModel):
     height: int
     rights: RightsStatus = RightsStatus.UNKNOWN
     rights_note: str = ""
+    rights_owner: Optional[str] = None
+    rights_license: Optional[str] = None
+    rights_evidence_path: Optional[str] = None
+    rights_evidence_sha256: Optional[str] = None
+    source_media_sha256: Optional[str] = None
+    reference_original_path: Optional[str] = None
+    reference_cleaning: Optional[str] = None
+    allowed_platforms: list[str] = Field(default_factory=list)
     ingested_at: str = Field(default_factory=now_iso)
     rejected: Optional[str] = None             # reason if filtered out
 

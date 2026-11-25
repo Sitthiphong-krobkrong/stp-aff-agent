@@ -27,8 +27,9 @@ class VideoCfg(BaseModel):
     text_fade: float = 0.3            # seconds for text card fade-in
     crf: int = 19
     preset: str = "veryfast"
-    # AI video (LTX-2-mlx) — set ai_video = true in local.toml to enable
-    ai_video: bool = False
+    # AI video (LTX-2-mlx) from a documented real-product reference
+    ai_video: bool = True
+    ai_rights_evidence: Path | None = None
     ai_width: int = 288               # 9:16 vertical, must be multiple of 32
     ai_height: int = 512              # must be multiple of 32
     ai_frame_rate: int = 24           # LTX native fps (FFmpeg re-times to video.fps)
@@ -41,6 +42,7 @@ class TTSCfg(BaseModel):
     voice: str = "th-TH-NiwatNeural"
     rate: str = "-5%"
     azure_region: str = "southeastasia"
+    rights_evidence: Path | None = None  # local document covering commercial output use on target platforms
 
 
 class DirectorCfg(BaseModel):
@@ -66,15 +68,14 @@ class ScoreCfg(BaseModel):
     w_images: float = 0.20
     price_sweet_min: float = 99
     price_sweet_max: float = 1500
-    min_images: int = 4
+    min_images: int = 3
 
 
 class Config(BaseModel):
     runs_dir: Path = ROOT / "runs"
     fonts_dir: Path = ROOT / "fonts"
     pronounce: Path = ROOT / "config" / "pronounce.json"
-    # rights stance for seller listing images. False = fail closed (handoff default).
-    allow_listing_images: bool = False
+    rights_registry: Path = ROOT / "config" / "rights_registry.json"
     banned_words: list[str] = Field(default_factory=lambda: [
         "ดีที่สุด", "ถูกที่สุด", "ไม่มีดีเลย์", "รีวิวของจริง", "ทดสอบจริง", "ใช้เองจริง", "ขายดีอันดับ 1"])
     video: VideoCfg = VideoCfg()
