@@ -1,5 +1,7 @@
 # Plan v0.1 — supersedes 07_POC_PLAN where they differ (2026-11-11)
 
+> Historical plan: D4 was superseded on 2026-11-15. Current implementation rejects seller listing images without documented grants and generates video only from a rights-cleared real-product reference.
+
 ## Requirement (operator, 2026-11-11)
 Bot finds products with good commission + popularity → uses product images to make the video → package for
 posting with cart pinned. Human approves and posts.

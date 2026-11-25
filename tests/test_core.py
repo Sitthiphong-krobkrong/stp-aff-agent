@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from agent import claims
+from agent import claims, creative_quality
 from agent.config import Config, ScoreCfg
 from agent.render import plan_timing, wrap, font, _split_safe
 from agent.schemas import Candidate, Product, VideoPlan
@@ -52,6 +52,24 @@ def test_csv_source_parses_units_and_unknowns():
     assert all(not x.commission_verified for x in c.values())
 
 
+def test_csv_facts_reach_product_without_invented_attributes(tmp_path):
+    from agent.cli import write_inbox
+
+    csv_path = tmp_path / "offers.csv"
+    csv_path.write_text(
+        "name,listing_url,fact_1,fact_2,observed_at\n"
+        "เครื่องบดสับ,https://example.test/item,โถ 250 มล.,ชาร์จ USB,2026-11-15T10:00:00+07:00\n",
+        encoding="utf-8",
+    )
+    src = CsvSource(csv_path)
+    candidate = src.search(Config())[0]
+    product_dir = write_inbox(candidate, src.extra[candidate.source_ref], tmp_path / "inbox")
+    product = product_from_folder(product_dir)[0]
+
+    assert src.extra[candidate.source_ref]["facts"] == ["โถ 250 มล.", "ชาร์จ USB"]
+    assert list(product.facts.values()) == ["โถ 250 มล.", "ชาร์จ USB"]
+
+
 def test_openapi_signature_is_deterministic():
     assert sign("1", "s", "{}", 100) == sign("1", "s", "{}", 100)
     assert len(sign("1", "s", "{}", 100)) == 64
@@ -85,6 +103,34 @@ def test_invented_number_is_blocked():
     assert any("'12'" in e for e in errs)
 
 
+def test_price_is_forbidden_in_voice_screen_and_caption():
+    vp = demo_plan()
+    vp.shots[0].vo = "ราคา 299 บาท"
+    vp.shots[1].head = "฿299"
+    vp.shopee_caption = "ดูราคาปัจจุบัน"
+    errs = claims.check(vp, demo_product(), Config().banned_words)
+    assert any("shot1.vo: price mention 'ราคา'" in e for e in errs)
+    assert any("shot2.head: price mention '฿'" in e for e in errs)
+    assert any("shopee_caption: price mention 'ราคา'" in e for e in errs)
+
+
+def test_price_number_not_offered_as_script_evidence():
+    p = demo_product()
+    p.name = "โคมไฟ"
+    p.facts = {"สี": "ขาว", "ราคา/โปร": "299"}
+    p.price = 299
+    assert "299" not in claims.evidence_numbers(p)
+
+
+def test_director_prompt_hides_price_data():
+    from agent.director import build_prompt
+
+    p = demo_product()
+    prompt = build_prompt(p, [], Config())
+    facts = prompt.split("FACTS:\n", 1)[1].split("\nIMAGES:", 1)[0]
+    assert "ราคา" not in facts and "299" not in facts
+
+
 def test_banned_and_avoid_words_blocked():
     vp = demo_plan()
     vp.shots[1].vo = "ดีที่สุด ถนอมสายตา 100%"
@@ -96,6 +142,44 @@ def test_battery_head_needs_star():
     vp = demo_plan()
     vp.shots[5].head = "แบต 2000mAh"
     assert any("footnote" in e for e in claims.check(vp, demo_product(), Config().banned_words))
+
+
+def test_creative_gate_rejects_generic_hook_and_unsupported_outcome():
+    vp = demo_plan()
+    vp.shots[0].head = "ต้องมี!"
+    vp.shots[0].vo = "คุณแม่ต้องมี ดูตัวนี้ก่อน"
+    vp.shots[2].vo = "ลูกทานง่าย คุ้มมาก"
+    errors = creative_quality.check(vp, demo_product())
+    assert any("generic opener" in e for e in errors)
+    assert any("no recognizable product attribute" in e for e in errors)
+    assert any("ลูกทานง่าย" in e for e in errors)
+    assert any("คุ้มมาก" in e for e in errors)
+
+
+def test_creative_gate_accepts_specific_factual_hook():
+    vp = demo_plan()
+    vp.shots[0].head = "โคมไฟพับได้"
+    vp.shots[0].vo = "โคมไฟตั้งโต๊ะที่พับได้ รุ่นนี้มีอะไรให้ดูบ้าง"
+    assert creative_quality.check(vp, demo_product()) == []
+
+
+def test_creative_gate_accepts_fact_based_hook_without_product_name():
+    vp = demo_plan()
+    vp.shots[0].head = "พับเก็บได้"
+    vp.shots[0].vo = "พับเก็บได้ รุ่นนี้จัดวางยังไง"
+    p = demo_product()
+    p.facts = {"feature": "พับเก็บได้"}
+    assert creative_quality.check(vp, p) == []
+
+
+def test_creative_gate_blocks_unproved_claims_seen_in_live_ollama_sample():
+    vp = demo_plan()
+    vp.shots[1].vo = "ไม่ต้องต้มให้ยุ่ง"
+    vp.shots[2].vo = "มีดสแตนเลส ปลอดภัย ทำความสะอาดง่าย"
+    errors = creative_quality.check(vp, demo_product())
+    assert any("ไม่ต้องต้ม" in e for e in errors)
+    assert any("ปลอดภัย" in e for e in errors)
+    assert any("ทำความสะอาดง่าย" in e for e in errors)
 
 
 def test_caption_length_counts_emoji_as_two():
@@ -180,3 +264,25 @@ def test_director_feeds_claim_errors_back_and_retries(monkeypatch):
     assert len(attempts) == 2 and attempts[0]["errors"] and not attempts[1]["errors"]
     assert "'12'" in prompts[1]                       # error was fed back to the model
     assert vp.director == "fake"
+
+
+def test_director_rewrites_generic_hook(monkeypatch):
+    import agent.director as director
+    from agent.schemas import Asset
+    good = json.loads((DEMO / "plan.json").read_text(encoding="utf-8"))
+    bad = json.loads(json.dumps(good))
+    bad["shots"][0]["head"] = "ของมันต้องมี"
+    bad["shots"][0]["vo"] = "คุณแม่ต้องมี ดูตัวนี้ก่อน"
+    prompts = []
+
+    def fake(prompt):
+        prompts.append(prompt)
+        return json.dumps(bad if len(prompts) == 1 else good, ensure_ascii=False)
+
+    cfg = Config()
+    monkeypatch.setattr(director, "_provider", lambda cfg, pf: (fake, "fake"))
+    assets = [Asset(id=f"img0{i}", path="x", sha256="x", width=1000, height=1000) for i in range(5)]
+    _, attempts = director.plan(demo_product(), assets, cfg)
+    assert len(attempts) == 2
+    assert any("generic opener" in e for e in attempts[0]["errors"])
+    assert "generic opener" in prompts[1]
