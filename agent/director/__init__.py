@@ -11,7 +11,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from .. import claims
+from .. import claims, creative_quality
 from ..config import Config
 from ..schemas import Asset, Product, VideoPlan
 from ..util import StepError, log
@@ -22,10 +22,18 @@ PROMPT = """คุณคือ creative director ทำคลิปรีวิ�
   "sub":"ข้อความรอง (ไม่บังคับ)","vo":"บทพากย์ช็อตนี้ 1 ประโยคสั้น","focus":[0.5,0.5]}}],
  "shopee_caption":"แคปชันสั้น","hashtags":["#a","#b","#c"],"tiktok_caption":"แคปชัน TikTok"}}
 
-กฎ:
-- 6-8 ช็อต: ช็อตแรก hook, ช็อตที่ 2 title (ชื่อ/ประเภทสินค้า), ถัดมา spec ช็อตละ 1 จุดขาย, ช็อตสุดท้าย cta
-- vo รวมทั้งหมดประมาณ 55-75 คำพูด (อ่านจบใน ~22 วินาที) ประโยคพูดธรรมชาติ ไม่อ่านสเปกแบบหุ่นยนต์
+กฎเนื้อหา:
+- 5-7 ช็อตตามจำนวนข้อเท็จจริงที่มี: ช็อตแรก hook, ช็อตที่ 2 title (ชื่อ/ประเภทสินค้า), ถัดมา spec ช็อตละ 1 จุดที่ต่างกันจริง, ช็อตสุดท้าย cta; ห้ามยืดบทหรือพูดซ้ำเพื่อให้ครบจำนวนช็อต
+- เขียนเหมือนคนแนะนำของให้เพื่อนฟัง: ประโยคสั้น พูดลื่น ไม่อ่านชื่อเต็ม/สเปกยาวซ้ำกัน ไม่เติมคำอุทานหรือคำชมลอย ๆ
+- ชื่อสินค้าใน PRODUCT อาจเป็นชื่อประกาศขายที่ยาวมาก ให้ย่อเป็นชื่อเรียกสั้น ๆ ที่ยังระบุชนิดสินค้าได้ ห้ามคัดลอกชื่อเต็มลง head; head ทุกช็อตต้องไม่เกิน 18 ตัวอักษรไทย (นับช่องว่างด้วย) และ vo ไม่เกิน 140 ตัวอักษร
+- hook ต้องเริ่มจากจุดที่ *มีอยู่ใน FACTS หรือชื่อสินค้า* และชวนดูต่อด้วยคำถามหรือความต่างที่เฉพาะกับสินค้านี้ ไม่เปิดด้วยปัญหาที่เดาเองหรือระบุกลุ่มคนที่ไม่มีหลักฐาน
+- ก่อนเลือก hook ให้คิดอย่างน้อย 3 มุมในใจ (จุดเด่น / วิธีเลือก / ข้อสงสัยจากสเปก) แล้วส่งเฉพาะมุมที่เฉพาะเจาะจงที่สุดใน shots[0]
+- หลีกเลี่ยง hook สำเร็จรูป เช่น "ต้องมี", "เคยได้ยินไหม", "หลุดมือบ่อย?", "รั่วซึมอีกแล้ว?" และคำขายลอย ๆ เช่น "ราคาแค่", "คุ้มมาก", "ห้ามพลาด"
+- ให้ VO ช็อตแรกเข้าเรื่องใน 1 ประโยค; ช็อต title บอกชื่อแบบสั้น; ช็อต spec ต่อเหตุผลทีละข้อ; CTA ชวนดูรายละเอียด ไม่เร่งซื้อ
+- vo ทั้งคลิปอ่านจบได้ใน ~22 วินาที ประโยคพูดธรรมชาติ ไม่อ่านสเปกแบบหุ่นยนต์
 - ใช้เฉพาะข้อมูลใน FACTS ห้ามเดาตัวเลข ราคา โปร หรือสเปกที่ไม่มี ตัวเลขทุกตัวต้องมีใน FACTS
+- ข้อมูลจากชื่อ/รายละเอียดร้านเป็นคำกล่าวของร้าน ไม่ใช่ผลทดสอบของเรา ห้ามขยายเป็นผลลัพธ์หรือคำรับประกัน เช่น "ลูกทานง่าย", "ไม่ต้องกลัวหลุด", "ใส่ได้ทั้งวัน", "ใช้ได้ทุกที่", "ไม่ต้องต้ม", "ปลอดภัย", "ทำความสะอาดง่าย", "พกพาได้สะดวก"
+- ห้ามพูดหรือแสดงราคาโดยเด็ดขาด ทั้งตัวเลข บาท ฿ ส่วนลด โปรโมชั่น และคำชวนเช็กราคา ใน head/sub/vo/caption/hashtags; CTA ชวนดูรายละเอียดสินค้าเท่านั้น
 - ห้ามพูดว่าใช้เอง/ทดสอบเอง/ขายดีอันดับ 1 ห้ามคำ: {banned}
 - ห้ามพูดถึง: {avoid}
 - ตัวเลขแบต/ความทน ใน head/sub ใส่ * ต่อท้าย
@@ -42,9 +50,8 @@ IMAGES: {images}
 
 
 def build_prompt(p: Product, assets: list[Asset], cfg: Config) -> str:
-    facts = "\n".join(f"- {k}: {v}" for k, v in p.facts.items()) or "- (ไม่มี)"
-    if p.price:
-        facts += f"\n- ราคา: {p.price:g} บาท"
+    facts = "\n".join(f"- {k}: {v}" for k, v in p.facts.items()
+                      if not any(word in k for word in ("ราคา", "โปร"))) or "- (ไม่มี)"
     imgs = ", ".join(f"{a.id} ({a.width}x{a.height})" for a in assets)
     return PROMPT.format(banned=", ".join(cfg.banned_words), avoid=", ".join(p.avoid_claims) or "-",
                          name=p.name, facts=facts, images=imgs)
@@ -71,9 +78,15 @@ def _provider(cfg: Config, plan_file: Path | None):
     raise ValueError(f"unknown director provider {name}")
 
 
-def plan(p: Product, assets: list[Asset], cfg: Config, plan_file: Path | None = None) -> tuple[VideoPlan, list]:
+def plan(p: Product, assets: list[Asset], cfg: Config, plan_file: Path | None = None,
+         revision_instruction: str | None = None, previous_plan: dict | None = None) -> tuple[VideoPlan, list]:
     complete, label = _provider(cfg, plan_file)
     base = build_prompt(p, assets, cfg)
+    if revision_instruction:
+        base += ("\nคำขอแก้จากผู้ตรวจ (ใช้เฉพาะข้อเท็จจริงใน FACTS และยังต้องผ่านกฎทั้งหมด):\n"
+                 + revision_instruction.strip() + "\n")
+        if previous_plan:
+            base += "\nแผนเวอร์ชันก่อนสำหรับอ้างอิงการแก้:\n" + json.dumps(previous_plan, ensure_ascii=False) + "\n"
     ids = {a.id for a in assets}
     attempts, feedback = [], ""
     tries = 1 if cfg.director.provider == "file" else cfg.director.retries
@@ -85,6 +98,7 @@ def plan(p: Product, assets: list[Asset], cfg: Config, plan_file: Path | None = 
             errs = [f"shot{i + 1}: unknown asset_id {s.asset_id}" for i, s in enumerate(vp.shots)
                     if s.asset_id not in ids]
             errs += claims.check(vp, p, cfg.banned_words)
+            errs += creative_quality.check(vp, p)
         except (ValueError, ValidationError) as e:
             vp, errs = None, [str(e)[:800]]
         attempts.append({"attempt": n, "errors": errs})

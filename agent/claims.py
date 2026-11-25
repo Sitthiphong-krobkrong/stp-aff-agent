@@ -1,8 +1,8 @@
 """Deterministic claim gate. The LLM writes; this decides whether the words may ship.
 
 Rules
-1. Every number in on-screen text / narration / captions must appear in the product evidence
-   (name, facts, price). Numbers are compared after removing thousands separators.
+1. Every number in on-screen text / narration / captions must appear in non-price product evidence
+   (name, facts). Numbers are compared after removing thousands separators.
 2. No banned words (config) and no product-specific avoid_claims.
 3. Battery/durability style claims must carry '*' (footnote "*ตามสเปกผู้ผลิต" is added by renderer).
 4. Captions: Shopee caption + hashtags <= 150 (emoji = 2), 3-5 hashtags.
@@ -16,6 +16,11 @@ from .util import caption_len
 
 NUM = re.compile(r"\d+(?:[.,]\d+)*")
 STAR_TRIGGERS = ("แบต", "mAh", "ชั่วโมง", "ทนทาน", "อายุการใช้งาน", "กันน้ำ")
+PRICE_WORDS = ("ราคา", "บาท", "฿", "โปรโมชั่น", "โปรโมชัน", "ส่วนลด")
+
+
+def _non_price_facts(p: Product) -> list[str]:
+    return [v for k, v in p.facts.items() if not any(word in k for word in ("ราคา", "โปร"))]
 
 
 def _nums(text: str) -> set[str]:
@@ -23,8 +28,7 @@ def _nums(text: str) -> set[str]:
 
 
 def evidence_numbers(p: Product) -> set[str]:
-    blob = " ".join([p.name, *(p.facts.values())] + ([str(int(p.price)) if p.price and p.price == int(p.price)
-                                                       else str(p.price)] if p.price else []))
+    blob = " ".join([p.name, *_non_price_facts(p)])
     return _nums(blob)
 
 
@@ -42,10 +46,14 @@ def check(plan: VideoPlan, p: Product, banned: list[str]) -> list[str]:
             if v:
                 texts.append((f"shot{i + 1}.{field}", v))
     texts += [("shopee_caption", plan.shopee_caption), ("tiktok_caption", plan.tiktok_caption)]
+    texts += [(f"hashtag{i + 1}", h) for i, h in enumerate(plan.hashtags)]
 
     for where, t in texts:
         for n in _nums(t) - allowed:
             errs.append(f"{where}: number '{n}' not found in product evidence")
+        for w in PRICE_WORDS:
+            if w in t:
+                errs.append(f"{where}: price mention '{w}' is not allowed")
         for w in banned:
             if w and w in t:
                 errs.append(f"{where}: banned word '{w}'")
