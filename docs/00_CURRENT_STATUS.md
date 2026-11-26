@@ -15,6 +15,12 @@
 - Current repository content, write permissions and deployment status must be rechecked live.
 - No verified autonomous product discovery + licensed assets + genuine MP4 run has been established in this handoff.
 
+## Update 2026-11-11 (verified by Claude Code)
+- Repo `stp-aff-agent` was empty (no commits); v0.1 code added on branch `feat/poc-v0.1` (see 10_PLAN_v0.1.md).
+- Renderer verified in cloud: fixture product → 1080x1920 30fps H.264+AAC MP4, ~19 s, QA + check.jpg.
+  Narration in that run was a silent placeholder (edge-tts blocked in cloud) → QA correctly blocked approval.
+- Not yet verified: edge-tts/Azure voice run, Ollama/Claude director run, Open API, real listing images.
+
 ## Critical unknowns
 - Whether the new repository now contains code (may have changed since prior checks).
 - Exact technology and rendering internals of `stp-aff-studio`.

@@ -1,0 +1,9 @@
+runs/
+inbox/
+config/local.toml
+config/rights_registry.json
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/

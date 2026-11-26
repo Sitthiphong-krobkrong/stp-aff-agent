@@ -1,0 +1,22 @@
+{
+  "_note": "Template only. Replace with actual product media and written rights evidence; save as config/rights_registry.json (gitignored).",
+  "grants": [
+    {
+      "listing_url": "https://example.invalid/replace-with-exact-listing-url",
+      "media_path": "/absolute/path/to/product-image-1.jpg",
+      "evidence_path": "/absolute/path/to/written-permission.pdf",
+      "owner": "replace with actual rights holder",
+      "license": "replace with actual grant or license name",
+      "kind": "licensed",
+      "origin": "brand_supplied",
+      "platforms": ["shopee", "tiktok"],
+      "commercial_use": true,
+      "expires_at": null,
+      "source_url": null,
+      "media_sha256": null,
+      "cleaned_media_path": "/absolute/path/to/cleaned-product-image-1.png",
+      "cleaned_media_sha256": null,
+      "cleaning_method": "image_edit"
+    }
+  ]
+}
